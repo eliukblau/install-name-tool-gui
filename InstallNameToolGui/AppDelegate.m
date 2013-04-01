@@ -28,19 +28,32 @@ NSMutableArray* controllers;
 {
 	self.controllers = [NSMutableArray array];
 	
-	// Insert code here to initialize your application
-	WindowController* w = [[WindowController alloc] initWithWindowNibName:@"MainWindow"];
-	[w showWindow:self];
-	[self.controllers addObject:w];
-	w->isFirst = YES;
+	[self newDocument:nil];
 }
 
--(void)openNewWindow:(NSString*)path
+-(void)openNewWindowWithFile:(NSString*)path
 {
 	WindowController* w = [[WindowController alloc] initWithWindowNibName:@"MainWindow"];
 	[w showWindow:self];
-	[w loadFile:path];
 	[self.controllers addObject:w];
+	if (path)
+		[w loadFile:path];
+}
+
+-(void)newDocument:(id)obj
+{
+	[self openNewWindowWithFile:nil];
+}
+
+-(void)openDocument:(id)obj
+{
+	NSString* filepath = obj;
+	[self openNewWindowWithFile:filepath];
+}
+
+-(void)close:(id)sender
+{
+	[self.controllers removeObject:sender];
 }
 
 @end

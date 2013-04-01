@@ -1,7 +1,10 @@
 #import "WindowController.h"
 #import "AppDelegate.h"
+#import <objc/runtime.h>
 
-@interface WindowController()
+static char const * const kButtonRowNumberTagKey = "kButtonRowNumberTagKey";
+
+@interface WindowController()<NSTableViewDelegate, NSTextFieldDelegate>
 @property (assign) BOOL observerIsSet;
 @property (retain) NSMutableArray* cachedContent;
 
@@ -15,7 +18,6 @@
 {
     self = [super initWithWindow:window];
     if (self) {
-//		[window setReleasedWhenClosed:YES];
 	}
     
     return self;
@@ -23,8 +25,7 @@
 
 -(void)windowWillClose:(NSNotification *)notification
 {
-	if (isFirst)
-	[NSApp terminate:nil];
+	[[NSApp delegate] close:self]; // the app delegate has the window list
 }
 
 - (void)windowDidLoad
@@ -32,13 +33,12 @@
     [super windowDidLoad];
 	assert(self.window);
 	self.window.delegate = self;
-
+	fieldCurrentFile.delegate = self;
+	tableView.delegate = self;
+	
 	[buttonBrowse setTarget:self];
 	[buttonBrowse setAction:@selector(onBrowse)];
-	
-	/*[buttonRevert setTarget:self];
-	 [buttonRevert setAction:@selector(onRevert)];*/
-	
+
 	[tableView setTarget:self];
 	[tableView setDoubleAction:@selector(doubleClick:)];
 	
@@ -51,7 +51,33 @@
 	NSTableColumn* c1 = [tableView tableColumnWithIdentifier:@"path"];
 	assert(c1);
 	[c1 bind:@"value" toObject:tableContentArray withKeyPath:@"arrangedObjects.path" options:bindingOptions];
-	
+
+	NSTableColumn* c2 = [tableView tableColumnWithIdentifier:@"open"];
+	assert(c2);
+
+}
+
+-(void)rowButtonOpenFile:(id)button
+{
+	int idx = [objc_getAssociatedObject(button, kButtonRowNumberTagKey) intValue];
+	NSDictionary* dict = [tableContentArray.arrangedObjects objectAtIndex:idx];
+	NSString* path = [dict objectForKey:@"path"];
+	if (path && path.length > 1)
+		[[NSApp delegate] openDocument:path];
+}
+
+-(NSCell*)tableView:(NSTableView *)tableView dataCellForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row
+{
+	if ([[tableColumn identifier] isEqualTo:@"open"]) {
+		NSButtonCell* cell = [[NSButtonCell alloc] init];
+		[cell setButtonType:NSMomentaryPushInButton];
+		[cell setTitle:@"Open"];
+		objc_setAssociatedObject(cell, kButtonRowNumberTagKey, [NSNumber numberWithInteger:row],OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		[cell setTarget:self];
+		[cell setAction:@selector(rowButtonOpenFile:)];
+		return cell;
+	}
+	return [tableColumn dataCell];
 }
 
 -(void)doubleClick:(id)object
@@ -105,8 +131,6 @@
 	BOOL isDylib = [path hasSuffix:@"dylib"];
 	
 	[fieldLibraryId setEnabled:isDylib];
-	[buttonSetToCurrentPath setEnabled:isDylib];
-	[buttonSetAllToPathToThis setEnabled:isDylib];
 	[buttonSetId setEnabled:isDylib];
 	
 	if (isDylib) {
@@ -158,7 +182,7 @@
 			if (i++ < 1)
 				continue;
 			
-			[((AppDelegate*)[NSApp delegate]) openNewWindow:url.path];
+			[((AppDelegate*)[NSApp delegate]) openNewWindowWithFile:url.path];
 		}
 	}
 }
@@ -192,6 +216,12 @@
 	NSLog(@" old %@ ", old);
 	
 	[self installNameChangeFile:fieldCurrentFile.stringValue from:old to:newPath];
+}
+
+-(void)controlTextDidChange:(NSNotification *)notification
+{
+	NSTextField* tf = [notification object];
+	[self loadFile:[tf stringValue]];
 }
 
 @end

@@ -9,5 +9,6 @@
 #import <Cocoa/Cocoa.h>
 
 @interface AppDelegate : NSObject <NSApplicationDelegate>
--(void)openNewWindow:(NSString*)path;
+-(void)openNewWindowWithFile:(NSString*)path;
+
 @end

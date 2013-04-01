@@ -2,8 +2,6 @@
 #import "AppDelegate.h"
 #import <objc/runtime.h>
 
-static char const * const kButtonRowNumberTagKey = "kButtonRowNumberTagKey";
-
 @interface WindowController()<NSTableViewDelegate, NSTextFieldDelegate>
 @property (assign) BOOL observerIsSet;
 @property (retain) NSMutableArray* cachedContent;
@@ -57,10 +55,10 @@ static char const * const kButtonRowNumberTagKey = "kButtonRowNumberTagKey";
 
 }
 
--(void)rowButtonOpenFile:(id)button
+-(void)rowButtonOpenFile:(id)sender
 {
-	int idx = [objc_getAssociatedObject(button, kButtonRowNumberTagKey) intValue];
-	NSDictionary* dict = [tableContentArray.arrangedObjects objectAtIndex:idx];
+	NSInteger row = [sender clickedRow];
+	NSDictionary* dict = [tableContentArray.arrangedObjects objectAtIndex:row];
 	NSString* path = [dict objectForKey:@"path"];
 	if (path && path.length > 1)
 		[[NSApp delegate] openDocument:path];
@@ -72,7 +70,7 @@ static char const * const kButtonRowNumberTagKey = "kButtonRowNumberTagKey";
 		NSButtonCell* cell = [[NSButtonCell alloc] init];
 		[cell setButtonType:NSMomentaryPushInButton];
 		[cell setTitle:@"Open"];
-		objc_setAssociatedObject(cell, kButtonRowNumberTagKey, [NSNumber numberWithInteger:row],OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		[cell setTag:row];
 		[cell setTarget:self];
 		[cell setAction:@selector(rowButtonOpenFile:)];
 		return cell;

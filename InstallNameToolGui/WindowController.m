@@ -60,6 +60,21 @@
 	NSInteger row = [sender clickedRow];
 	NSDictionary* dict = [tableContentArray.arrangedObjects objectAtIndex:row];
 	NSString* path = [dict objectForKey:@"path"];
+	
+	NSString* currentPath = [fieldCurrentFile.stringValue stringByDeletingLastPathComponent];
+	path = [path stringByReplacingOccurrencesOfString:@"@executable_path" withString:currentPath];
+	
+	if ([path hasPrefix:@"@rpath/"]) { // done properly, look it up from otool -l
+		path = [path stringByReplacingOccurrencesOfString:@"@rpath/" withString:@""];
+		currentPath = [currentPath stringByDeletingLastPathComponent];
+		
+		NSString* inFrameworks = [[currentPath stringByAppendingPathComponent:@"Frameworks"] stringByAppendingPathComponent:path];
+		if ([[NSFileManager defaultManager] fileExistsAtPath:inFrameworks]) {
+			path = inFrameworks;
+		}
+	}
+	
+	NSLog(@"%@", path);
 	if (path && path.length > 1)
 		[[NSApp delegate] openDocument:path];
 }

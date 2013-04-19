@@ -14,5 +14,5 @@
 }
 
 -(void)loadFile:(NSString*)path;
-
+-(void)onBrowse;
 @end

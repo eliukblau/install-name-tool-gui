@@ -8,7 +8,9 @@
 
 #import <Cocoa/Cocoa.h>
 
+@class WindowController;
+
 @interface AppDelegate : NSObject <NSApplicationDelegate>
--(void)openNewWindowWithFile:(NSString*)path;
+-(WindowController*)openNewWindowWithFile:(NSString*)path;
 
 @end

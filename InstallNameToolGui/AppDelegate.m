@@ -24,20 +24,21 @@
 
 NSMutableArray* controllers;
 
-- (void)applicationDidFinishLaunching:(NSNotification *)aNotification
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotificationis
 {
 	self.controllers = [NSMutableArray array];
 	
 	[self newDocument:nil];
 }
 
--(void)openNewWindowWithFile:(NSString*)path
+-(WindowController*)openNewWindowWithFile:(NSString*)path
 {
 	WindowController* w = [[WindowController alloc] initWithWindowNibName:@"MainWindow"];
 	[w showWindow:self];
 	[self.controllers addObject:w];
 	if (path)
 		[w loadFile:path];
+	return w;
 }
 
 -(void)newDocument:(id)obj
@@ -47,8 +48,14 @@ NSMutableArray* controllers;
 
 -(void)openDocument:(id)obj
 {
-	NSString* filepath = obj;
-	[self openNewWindowWithFile:filepath];
+	if ([obj isKindOfClass:[NSMenuItem class]]) {
+		WindowController* w = [self openNewWindowWithFile:nil];
+		[w onBrowse];
+	}
+	else {
+		NSString* filepath = obj;
+		[self openNewWindowWithFile:filepath];
+	}
 }
 
 -(void)close:(id)sender

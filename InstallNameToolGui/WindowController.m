@@ -234,7 +234,8 @@
 -(void)controlTextDidChange:(NSNotification *)notification
 {
 	NSTextField* tf = [notification object];
-	[self loadFile:[tf stringValue]];
+	if (tf == fieldCurrentFile)
+		[self loadFile:[tf stringValue]];
 }
 
 @end

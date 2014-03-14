@@ -31,9 +31,10 @@ NSMutableArray* controllers;
 	[self newDocument:nil];
 }
 
--(WindowController*)openNewWindowWithFile:(NSString*)path
+-(WindowController*)openNewWindowWithFile:(NSString*)path executablePath:(NSString*)execPath
 {
 	WindowController* w = [[WindowController alloc] initWithWindowNibName:@"MainWindow"];
+	w.executablePath = execPath;
 	[w showWindow:self];
 	[self.controllers addObject:w];
 	if (path)
@@ -43,18 +44,18 @@ NSMutableArray* controllers;
 
 -(void)newDocument:(id)obj
 {
-	[self openNewWindowWithFile:nil];
+	[self openNewWindowWithFile:nil executablePath:nil];
 }
 
 -(void)openDocument:(id)obj
 {
 	if ([obj isKindOfClass:[NSMenuItem class]]) {
-		WindowController* w = [self openNewWindowWithFile:nil];
+		WindowController* w = [self openNewWindowWithFile:nil executablePath:nil];
 		[w onBrowse];
 	}
-	else {
-		NSString* filepath = obj;
-		[self openNewWindowWithFile:filepath];
+	else if ([obj isKindOfClass:[NSDictionary class]]) {
+		NSDictionary* dict = obj;
+		[self openNewWindowWithFile:[dict objectForKey:@"file"] executablePath:[dict objectForKey:@"exec_path"]];
 	}
 }
 

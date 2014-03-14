@@ -13,6 +13,8 @@
 	IBOutlet NSArrayController* tableContentArray;
 }
 
+@property (copy) NSString* executablePath;
+
 -(void)loadFile:(NSString*)path;
 -(void)onBrowse;
 @end

@@ -11,6 +11,6 @@
 @class WindowController;
 
 @interface AppDelegate : NSObject <NSApplicationDelegate>
--(WindowController*)openNewWindowWithFile:(NSString*)path;
+-(WindowController*)openNewWindowWithFile:(NSString*)path executablePath:(NSString*)execPath;
 
 @end

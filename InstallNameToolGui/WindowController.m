@@ -4,18 +4,18 @@
 
 @interface WindowController()<NSTableViewDelegate, NSTextFieldDelegate>
 @property (assign) BOOL observerIsSet;
-@property (retain) NSMutableArray* cachedContent;
+@property (strong) NSMutableArray* cachedContent;
+@property (strong) NSMutableArray* loaderRPaths;
 
 @end
 
 @implementation WindowController
 
-@synthesize observerIsSet, cachedContent=_cachedContent;
-
 - (id)initWithWindow:(NSWindow *)window
 {
     self = [super initWithWindow:window];
     if (self) {
+		self.loaderRPaths = [NSMutableArray array];
 	}
     
     return self;
@@ -24,6 +24,32 @@
 -(void)windowWillClose:(NSNotification *)notification
 {
 	[[NSApp delegate] close:self]; // the app delegate has the window list
+}
+
+-(NSString*)get_AtLoaderPath
+{
+	return [fieldCurrentFile.stringValue stringByDeletingLastPathComponent];
+}
+
+-(NSString*)get_AtExecutablePath
+{
+	return (self.executablePath) ? self.executablePath : [self get_AtLoaderPath];
+}
+
+-(void)extractLoaderRPaths:(NSString*)file
+{
+	NSString* cmd = [NSString stringWithFormat:@"otool -l '%@' | grep -A 3 LC_RPATH | grep path | perl -lane 'print $F[1]'", file];
+	NSString* output = runCommand(cmd);
+	NSArray* lines = [output componentsSeparatedByString:@"\n"];
+	for (__strong NSString* line in lines) {
+		if ([line rangeOfString:@"/"].location == NSNotFound)
+			continue;
+		
+		line = [line stringByReplacingOccurrencesOfString:@"@loader_path" withString:[self get_AtLoaderPath]];
+		line = [line stringByReplacingOccurrencesOfString:@"@executable_path" withString:[self get_AtExecutablePath]];
+		
+		[self.loaderRPaths addObject:[line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]];
+	}
 }
 
 - (void)windowDidLoad
@@ -55,28 +81,65 @@
 
 }
 
+NSString* runCommand(NSString *commandToRun)
+{
+    NSTask *task;
+    task = [[NSTask alloc] init];
+    [task setLaunchPath: @"/bin/sh"];
+	
+    NSArray *arguments = [NSArray arrayWithObjects:
+                          @"-c" ,
+                          [NSString stringWithFormat:@"%@", commandToRun],
+                          nil];
+    NSLog(@"run command: %@",commandToRun);
+    [task setArguments: arguments];
+	
+    NSPipe *pipe;
+    pipe = [NSPipe pipe];
+    [task setStandardOutput: pipe];
+	
+    NSFileHandle *file;
+    file = [pipe fileHandleForReading];
+	
+    [task launch];
+	
+    NSData *data;
+    data = [file readDataToEndOfFile];
+	
+    NSString *output;
+    output = [[NSString alloc] initWithData: data encoding: NSUTF8StringEncoding];
+    return output;
+}
+
 -(void)rowButtonOpenFile:(id)sender
 {
 	NSInteger row = [sender clickedRow];
 	NSDictionary* dict = [tableContentArray.arrangedObjects objectAtIndex:row];
 	NSString* path = [dict objectForKey:@"path"];
 	
-	NSString* currentPath = [fieldCurrentFile.stringValue stringByDeletingLastPathComponent];
-	path = [path stringByReplacingOccurrencesOfString:@"@executable_path" withString:currentPath];
+	path = [path stringByReplacingOccurrencesOfString:@"@executable_path" withString:[self get_AtExecutablePath]];
+	path = [path stringByReplacingOccurrencesOfString:@"@loader_path" withString:[self get_AtLoaderPath]];
 	
-	if ([path hasPrefix:@"@rpath/"]) { // done properly, look it up from otool -l
-		path = [path stringByReplacingOccurrencesOfString:@"@rpath/" withString:@""];
-		currentPath = [currentPath stringByDeletingLastPathComponent];
-		
-		NSString* inFrameworks = [[currentPath stringByAppendingPathComponent:@"Frameworks"] stringByAppendingPathComponent:path];
-		if ([[NSFileManager defaultManager] fileExistsAtPath:inFrameworks]) {
-			path = inFrameworks;
+	if ([path hasPrefix:@"@rpath/"]) {
+		for (NSString* rpath in self.loaderRPaths) {
+			NSString* newPath = [path stringByReplacingOccurrencesOfString:@"@rpath/" withString:rpath];
+			if ([[NSFileManager defaultManager] fileExistsAtPath:newPath]) {
+				path = newPath;
+				break;
+			}
 		}
 	}
 	
 	NSLog(@"%@", path);
-	if (path && path.length > 1)
-		[[NSApp delegate] openDocument:path];
+	if (path && path.length > 1) {
+		
+		NSMutableDictionary* dict = [NSMutableDictionary dictionary];
+		[dict setObject:path forKey:@"file"];
+		if (self.executablePath)
+			[dict setObject:self.executablePath forKey:@"exec_path"];
+
+		[[NSApp delegate] openDocument:dict];
+	}
 }
 
 -(NSCell*)tableView:(NSTableView *)tableView dataCellForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row
@@ -114,7 +177,7 @@
 	
 	NSString* cmd = [NSString stringWithFormat:@"install_name_tool -id %@ %@", fieldLibraryId.stringValue,
 																			fieldCurrentFile.stringValue];
-	system(cmd.UTF8String);
+	runCommand(cmd);
 	
 	[self loadFile:fieldCurrentFile.stringValue];
 }
@@ -122,21 +185,21 @@
 -(void)loadFile:(NSString*)path
 {
 	fieldCurrentFile.stringValue = path;
+
+	NSString* output = runCommand([NSString stringWithFormat:@"file '%@'", path]);
+	if ([output rangeOfString:@" executable "].location != NSNotFound) {
+		self.executablePath = [path stringByDeletingLastPathComponent];
+	}
+	
+	[self extractLoaderRPaths:path];
 	
 	[tableContentArray removeObjects:[tableContentArray arrangedObjects]];
+
+	NSString* cmd = [NSString stringWithFormat:@"otool -L '%@'", path];
+	output = runCommand(cmd);
+	NSArray* lines = [output componentsSeparatedByString:@"\n"];
 	
-	//[tableView setNeedsDisplay];
-	NSString* outFile = @"/tmp/otool_out.txt";
-	
-	system("rm -f /tmp/otool_out.txt");
-	
-	NSString* cmd = [NSString stringWithFormat:@"otool -L '%@' > %@", path, outFile];
-	system(cmd.UTF8String);
-	
-	NSString* filestring = [NSString stringWithContentsOfFile:outFile encoding:NSUTF8StringEncoding error:nil];
-	NSArray* lines = [filestring componentsSeparatedByString:@"\n"];
-	
-	if (observerIsSet) {
+	if (self.observerIsSet) {
 		[tableContentArray removeObserver:self forKeyPath:@"arrangedObjects"];
 		[tableContentArray removeObserver:self forKeyPath:@"arrangedObjects.path"];
 	}
@@ -169,7 +232,7 @@
 	
 	[tableContentArray addObserver:self forKeyPath:@"arrangedObjects" options:0 context:nil];
     [tableContentArray addObserver:self forKeyPath:@"arrangedObjects.path" options:0 context:nil];
-	observerIsSet = YES;
+	self.observerIsSet = YES;
 }
 
 /*-(void)onRevert
@@ -195,7 +258,7 @@
 			if (i++ < 1)
 				continue;
 			
-			[((AppDelegate*)[NSApp delegate]) openNewWindowWithFile:url.path];
+			[((AppDelegate*)[NSApp delegate]) openNewWindowWithFile:url.path executablePath:self.executablePath];
 		}
 	}
 }
@@ -209,7 +272,7 @@
 		return;
 	
 	NSString* cmd = [NSString stringWithFormat:@"install_name_tool -change '%@' '%@' '%@' ", oldPath, newPath, file];
-	system(cmd.UTF8String);
+	runCommand(cmd);
 	[self loadFile:file];
 }
 
